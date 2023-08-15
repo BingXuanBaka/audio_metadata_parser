@@ -4,7 +4,7 @@ import '../audio_metadata_parser.dart';
 import '../common/utils.dart';
 
 class ID3v2MetaDataParser implements AudioMetadataParser {
-  late List<int> bytes;
+  List<int> bytes;
   int offset = 0;
   int reversion = 0;
   int length = 0;
@@ -41,6 +41,7 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
         switch (frame.id) {
           // Cover image
           case "APIC":
+          case "PIC":
             var parsedPic = _parseAttachedPicture(frame.bytes);
 
             if (parsedPic.pictureType == 0x03) {
@@ -55,6 +56,7 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
 
           // Album name
           case "TALB":
+          case "TAL":
             result.album = _parseTextData(
               frame.bytes[0],
               frame.bytes.sublist(1),
@@ -64,6 +66,7 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
 
           // Track name
           case "TIT2":
+          case "TT2":
             result.title = _parseTextData(
               frame.bytes[0],
               frame.bytes.sublist(1),
@@ -73,6 +76,7 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
 
           // Comments
           case "COMM":
+          case "COM":
             int offset = 0;
 
             //print(frame.bytes);
@@ -87,9 +91,11 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
             if (encoding == 1) {
               // UTF16 text encoding
               for (offset += 1;
-                  frame.bytes[offset] != 0x00 || frame.bytes[offset - 1] != 0x00;
+                  frame.bytes[offset] != 0x00 ||
+                      frame.bytes[offset - 1] != 0x00;
                   offset += 2) {
-                descriptionBytes.addAll([frame.bytes[offset], frame.bytes[offset - 1]]);
+                descriptionBytes
+                    .addAll([frame.bytes[offset], frame.bytes[offset - 1]]);
               }
               offset += 1;
             } else {
@@ -111,6 +117,7 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
 
           // Artist
           case "TPE1":
+          case "TP1":
             result.artist = _parseTextData(
               frame.bytes[0],
               frame.bytes.sublist(1),
@@ -120,6 +127,7 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
 
           // Album artist
           case "TPE2":
+          case "TP2":
             result.albumArtist = _parseTextData(
               frame.bytes[0],
               frame.bytes.sublist(1),
@@ -129,6 +137,7 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
 
           // Year
           case "TYER":
+          case "TYR":
             result.year = int.tryParse(
               _parseTextData(
                 frame.bytes[0],
@@ -140,6 +149,7 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
 
           // Track number
           case "TRCK":
+          case "TRK":
             List<String> strings = _parseTextData(
               frame.bytes[0],
               frame.bytes.sublist(1),
@@ -153,6 +163,7 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
 
           // Genre
           case "TCON":
+          case "TCO":
             result.genre = _parseTextData(
               frame.bytes[0],
               frame.bytes.sublist(1),
@@ -173,10 +184,13 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
     //int compressedLength = 0;
 
     // parse frameID
-    String frameID = String.fromCharCodes(_readBytes(4) ?? []);
+    String frameID =
+        String.fromCharCodes(_readBytes(reversion < 3 ? 3 : 4) ?? []);
 
     //parse length
-    frameLength = parseIntFromBytes(_readBytes(4) ?? []);
+    frameLength = reversion >= 4
+        ? parseSynchsafe(_readBytes(4) ?? [])
+        : parseIntFromBytes(_readBytes(reversion <= 2 ? 3 : 4) ?? []);
 
     // parse flags
     //int flag1 = bytes[offset];
@@ -203,6 +217,10 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
         return latin1.decode(bytes);
       case 1:
         return parseUTF16StringWithBOM(bytes);
+      case 2: 
+        return parseUTF16StringWithBOM([0xFE, 0xFF, ...bytes]);
+      case 3:
+        return utf8.decode(bytes);
     }
 
     // returns a empty string defaultly, if not parsed done
@@ -218,16 +236,25 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
     int encoding = body[offset];
     offset += 1;
 
-    var mimeType = "";
-    // get MIMEType bytes until found 0x00
-    while (body[offset] != 0) {
-      mimeType += String.fromCharCode(body[offset]);
+    // parse picture MIME
+    // id3v2.2 and lower
+    if (reversion <= 2) {
+      var type =
+          String.fromCharCodes(body.sublist(offset, offset + 3)).toLowerCase();
+      resultImage.imageMIMEType = type == "jpg" ? "image/jpeg" : "image/$type";
+      offset += 3;
+    }
+    // id3v2.3 and higher
+    else {
+      var type = "";
+      while (body[offset] != 0) {
+        type += String.fromCharCode(body[offset]);
+        offset += 1;
+      }
+
+      resultImage.imageMIMEType = type;
       offset += 1;
     }
-
-    // parse picture MIME
-    resultImage.imageMIMEType = mimeType;
-    offset += 1;
 
     // parse picture type
     pictureType = body[offset];
