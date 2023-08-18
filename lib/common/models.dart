@@ -34,7 +34,7 @@ class AudioMetadata {
 
 class MetadataBlock {
   MetadataBlock(this.id, this.bytes);
-  String id;
+  List<int> id;
   List<int> bytes;
 
   @override

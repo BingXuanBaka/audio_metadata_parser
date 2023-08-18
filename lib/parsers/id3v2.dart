@@ -38,7 +38,7 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
         rowMetadataBlocks.add(frame);
         //print(frame);
 
-        switch (frame.id) {
+        switch (String.fromCharCodes(frame.id)) {
           // Cover image
           case "APIC":
           case "PIC":
@@ -184,8 +184,7 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
     //int compressedLength = 0;
 
     // parse frameID
-    String frameID =
-        String.fromCharCodes(_readBytes(reversion < 3 ? 3 : 4) ?? []);
+    List<int> frameID = _readBytes(reversion < 3 ? 3 : 4) ?? [];
 
     //parse length
     frameLength = reversion >= 4
@@ -217,7 +216,7 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
         return latin1.decode(bytes);
       case 1:
         return parseUTF16StringWithBOM(bytes);
-      case 2: 
+      case 2:
         return parseUTF16StringWithBOM([0xFE, 0xFF, ...bytes]);
       case 3:
         return utf8.decode(bytes);
