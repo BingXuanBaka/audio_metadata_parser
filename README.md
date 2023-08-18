@@ -11,12 +11,15 @@ and the Flutter guide for
 [developing packages and plugins](https://flutter.dev/developing-packages).
 -->
 
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
+> [!WARNING]  
+> This package is still developing and may will have many breaking changes
+> before publishing the first release.  
+> **DO NOT** use in production currently.
 
 ## Features
 
-TODO: List what your package can do. Maybe include images, gifs, or videos.
+Parses metadata from audio files. Currently only supports ID3v2 codecs.  
+Supports of other codecs is still working on.
 
 ## Getting started
 
@@ -25,11 +28,13 @@ start using the package.
 
 ## Usage
 
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder.
+To parsing metadata from a File, create an instance of `AudioMetadataParser`
+and invoke `parse` to get a metadatas.
 
 ```dart
-const like = 'sample';
+final parser = AudioMetadataParser(File(/*PATH_TO_FILE*/));
+final metadata = parser.parse();
+print("Parsed metadatas: $metadata");
 ```
 
 ## Additional information
