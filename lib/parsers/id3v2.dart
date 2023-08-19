@@ -23,7 +23,6 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
 
     offset = 6;
     length = parseSynchsafe(_readBytes(4) ?? []);
-    print("total length: $length\r\n");
     offset = 10;
   }
 
