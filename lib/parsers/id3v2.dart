@@ -30,15 +30,13 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
   /// Parse metadata to [AudioMetadata]
   @override
   AudioMetadata parse() {
-    List<MetadataBlock> rowMetadataBlocks = [];
-    AudioMetadata result = AudioMetadata(rowMetadataBlocks: rowMetadataBlocks);
+    AudioMetadata result = AudioMetadata();
     try {
       while (offset < length) {
         var frame = _getFrame();
-        rowMetadataBlocks.add(frame);
         //print(frame);
 
-        switch (String.fromCharCodes(frame.id)) {
+        switch (frame.id) {
           // Cover image
           case "APIC":
           case "PIC":
@@ -118,10 +116,12 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
           // Artist
           case "TPE1":
           case "TP1":
-            result.artist = _parseTextData(
+            var frameText = _parseTextData(
               frame.bytes[0],
               frame.bytes.sublist(1),
             );
+
+            result.artist = frameText.split("/");
 
             break;
 
@@ -179,12 +179,13 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
     return result;
   }
 
-  MetadataBlock _getFrame() {
+  _ID3v2Frame _getFrame() {
     int frameLength = 0;
     //int compressedLength = 0;
 
     // parse frameID
-    List<int> frameID = _readBytes(reversion < 3 ? 3 : 4) ?? [];
+    String frameID =
+        String.fromCharCodes(_readBytes(reversion < 3 ? 3 : 4) ?? []);
 
     //parse length
     frameLength = reversion >= 4
@@ -207,7 +208,7 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
 
     List<int> content = _readBytes(frameLength) ?? [];
 
-    return MetadataBlock(frameID, content);
+    return _ID3v2Frame(frameID, content);
   }
 
   String _parseTextData(int textEncoding, List<int> bytes) {
@@ -294,4 +295,15 @@ class _AttachedPicture {
 
   int? pictureType;
   ImageMetadata? image;
+}
+
+class _ID3v2Frame {
+  _ID3v2Frame(this.id, this.bytes);
+  String id;
+  List<int> bytes;
+
+  @override
+  String toString() {
+    return "Frame{id: $id, bytes: $bytes}";
+  }
 }

@@ -1,6 +1,5 @@
 class AudioMetadata {
   AudioMetadata({
-    required this.rowMetadataBlocks,
     this.title,
     this.artist,
     this.album,
@@ -12,9 +11,8 @@ class AudioMetadata {
     this.frontCoverImage,
   });
 
-  List<MetadataBlock> rowMetadataBlocks;
   String? title;
-  String? artist;
+  List<String>? artist;
   String? album;
   String? albumArtist;
   String? comment;
@@ -29,17 +27,6 @@ class AudioMetadata {
     return "Metadata{title: $title, artist: $artist, album: $album, albumArtist: $albumArtist, "
         "comment: $comment, year: $year, genre: $genre, trackNumber: $trackNumber, "
         "albumTrackCount: $albumTrackCount, frontCoverImage: $frontCoverImage}";
-  }
-}
-
-class MetadataBlock {
-  MetadataBlock(this.id, this.bytes);
-  List<int> id;
-  List<int> bytes;
-
-  @override
-  String toString() {
-    return "Frame{id: $id, bytes: $bytes}";
   }
 }
 
@@ -58,9 +45,4 @@ class ImageMetadata {
   String toString() {
     return "ImageMetadata{description: $description, MIME: $imageMIMEType}";
   }
-}
-
-class CodecMetadata {
-  CodecMetadata({this.encodedBy});
-  final String? encodedBy;
 }
