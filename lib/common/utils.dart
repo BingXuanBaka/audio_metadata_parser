@@ -1,16 +1,18 @@
 int parseSynchsafe(List<int> bytes) {
-  return bytes.length >= 4
-      ? ((bytes[0] & 0x7F) << 21) |
-          ((bytes[1] & 0x7F) << 14) |
-          ((bytes[2] & 0x7F) << 7) |
-          (bytes[3] & 0x7F)
-      : 0;
+  var result = 0;
+
+  for (var i = 0; i < bytes.length; i++) {
+    result = (result << 7) | (bytes[i] & 0x7F);
+  }
+
+  return result;
 }
 
 int parseIntFromBytes(List<int> bytes) {
   int result = 0;
+  
   for (var i = 0; i < bytes.length; i++) {
-    result = (result << 8) | bytes[i];
+    result = (result << 8) | (bytes[i] & 0xFF);
   }
 
   return result;
