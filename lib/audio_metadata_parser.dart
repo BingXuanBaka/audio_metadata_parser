@@ -6,6 +6,7 @@ import 'common/models.dart';
 export 'common/models.dart';
 
 import 'parsers/id3v2.dart';
+import 'parsers/flac.dart';
 
 abstract class AudioMetadataParser {
   factory AudioMetadataParser(File file) {
@@ -18,6 +19,10 @@ abstract class AudioMetadataParser {
       return ID3v2MetaDataParser(bytes);
     }
 
+    if (String.fromCharCodes(bytes.sublist(0, 4)) == "fLaC") {
+      return FLACMetaDataParser(bytes);
+    }
+
     return UnknownMetadataParser();
   }
 
@@ -26,5 +31,5 @@ abstract class AudioMetadataParser {
 
 class UnknownMetadataParser implements AudioMetadataParser {
   @override
-  AudioMetadata parse() => AudioMetadata(rowMetadataBlocks: []);
+  AudioMetadata parse() => AudioMetadata();
 }
