@@ -96,6 +96,11 @@ class FLACMetaDataParser implements AudioMetadataParser {
               case "YEAR":
                 result.year = int.tryParse(commentContent[1]);
                 break;
+
+              case "LYRICS":
+                result.lyrics == null
+                    ? result.lyrics = [Lyric(commentContent[1])]
+                    : result.lyrics!.add(Lyric(commentContent[1]));
             }
           }
           break;

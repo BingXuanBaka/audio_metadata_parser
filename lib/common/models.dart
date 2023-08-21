@@ -9,6 +9,7 @@ class AudioMetadata {
     this.trackNumber,
     this.albumTrackCount,
     this.frontCoverImage,
+    this.lyrics,
   });
 
   String? title;
@@ -21,12 +22,27 @@ class AudioMetadata {
   int? trackNumber;
   int? albumTrackCount;
   ImageMetadata? frontCoverImage;
+  List<Lyric>? lyrics;
 
   @override
   String toString() {
     return "Metadata{title: $title, artist: $artist, album: $album, albumArtist: $albumArtist, "
         "comment: $comment, year: $year, genre: $genre, trackNumber: $trackNumber, "
-        "albumTrackCount: $albumTrackCount, frontCoverImage: $frontCoverImage}";
+        "albumTrackCount: $albumTrackCount, frontCoverImage: $frontCoverImage, lyrics: $lyrics}";
+  }
+}
+
+class Lyric {
+  Lyric(this.content, {
+    this.language,
+  });
+
+  String? language;
+  String? content;
+
+  @override 
+  String toString() {
+    return "Lyric{language: $language, content: $content}";
   }
 }
 

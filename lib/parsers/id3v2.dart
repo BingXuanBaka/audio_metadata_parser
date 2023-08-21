@@ -30,149 +30,181 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
   @override
   AudioMetadata parse() {
     AudioMetadata result = AudioMetadata();
-    try {
-      while (offset < length) {
-        var frame = _getFrame();
-        //print(frame);
 
-        switch (frame.id) {
-          // Cover image
-          case "APIC":
-          case "PIC":
-            var parsedPic = _parseAttachedPicture(frame.bytes);
+    while (offset < length) {
+      var frame = _getFrame();
+      //print(frame);
 
-            if (parsedPic.pictureType == 0x03) {
-              result.frontCoverImage = parsedPic.image;
+      switch (frame.id) {
+        // Cover image
+        case "APIC":
+        case "PIC":
+          var parsedPic = _parseAttachedPicture(frame.bytes);
+
+          if (parsedPic.pictureType == 0x03) {
+            result.frontCoverImage = parsedPic.image;
+          }
+
+          if (parsedPic.pictureType == 0x06) {
+            result.frontCoverImage = parsedPic.image;
+          }
+
+          break;
+
+        // Album name
+        case "TALB":
+        case "TAL":
+          result.album = _parseTextData(
+            frame.bytes[0],
+            frame.bytes.sublist(1),
+          );
+
+          break;
+
+        // Track name
+        case "TIT2":
+        case "TT2":
+          result.title = _parseTextData(
+            frame.bytes[0],
+            frame.bytes.sublist(1),
+          );
+
+          break;
+
+        // Comments
+        case "COMM":
+        case "COM":
+          int offset = 0;
+
+          //print(frame.bytes);
+          int encoding = frame.bytes[offset];
+          offset += 1;
+
+          // skip language settings
+          offset += 3;
+
+          // parse short description
+          List<int> descriptionBytes = [];
+          if (encoding == 1) {
+            // UTF16 text encoding
+            for (offset += 1;
+                frame.bytes[offset] != 0x00 || frame.bytes[offset - 1] != 0x00;
+                offset += 2) {
+              descriptionBytes
+                  .addAll([frame.bytes[offset], frame.bytes[offset - 1]]);
             }
-
-            if (parsedPic.pictureType == 0x06) {
-              result.frontCoverImage = parsedPic.image;
-            }
-
-            break;
-
-          // Album name
-          case "TALB":
-          case "TAL":
-            result.album = _parseTextData(
-              frame.bytes[0],
-              frame.bytes.sublist(1),
-            );
-
-            break;
-
-          // Track name
-          case "TIT2":
-          case "TT2":
-            result.title = _parseTextData(
-              frame.bytes[0],
-              frame.bytes.sublist(1),
-            );
-
-            break;
-
-          // Comments
-          case "COMM":
-          case "COM":
-            int offset = 0;
-
-            //print(frame.bytes);
-            int encoding = frame.bytes[offset];
             offset += 1;
-
-            // skip language settings
-            offset += 3;
-
-            // parse short description
-            List<int> descriptionBytes = [];
-            if (encoding == 1) {
-              // UTF16 text encoding
-              for (offset += 1;
-                  frame.bytes[offset] != 0x00 ||
-                      frame.bytes[offset - 1] != 0x00;
-                  offset += 2) {
-                descriptionBytes
-                    .addAll([frame.bytes[offset], frame.bytes[offset - 1]]);
-              }
+          } else {
+            // other text encodings
+            while (frame.bytes[offset] != 0) {
+              descriptionBytes.add(frame.bytes[offset]);
               offset += 1;
-            } else {
-              // other text encodings
-              while (frame.bytes[offset] != 0) {
-                descriptionBytes.add(frame.bytes[offset]);
-                offset += 1;
-              }
             }
-            String description = _parseTextData(encoding, descriptionBytes);
+          }
+          String description = _parseTextData(encoding, descriptionBytes);
 
-            // read and parse main comment
-            if (description == "") {
-              result.comment =
-                  _parseTextData(encoding, frame.bytes.sublist(offset));
-            }
+          // read and parse main comment
+          if (description == "") {
+            result.comment =
+                _parseTextData(encoding, frame.bytes.sublist(offset));
+          }
 
-            break;
+          break;
 
-          // Artist
-          case "TPE1":
-          case "TP1":
-            var frameText = _parseTextData(
+        // Artist
+        case "TPE1":
+        case "TP1":
+          var frameText = _parseTextData(
+            frame.bytes[0],
+            frame.bytes.sublist(1),
+          );
+
+          result.artist = frameText.split("/");
+
+          break;
+
+        // Album artist
+        case "TPE2":
+        case "TP2":
+          result.albumArtist = _parseTextData(
+            frame.bytes[0],
+            frame.bytes.sublist(1),
+          );
+
+          break;
+
+        // Year
+        case "TYER":
+        case "TYR":
+          result.year = int.tryParse(
+            _parseTextData(
               frame.bytes[0],
               frame.bytes.sublist(1),
-            );
+            ).replaceAll(RegExp(r"[^0-9/]"), ""),
+          );
 
-            result.artist = frameText.split("/");
+          break;
 
-            break;
+        // Track number
+        case "TRCK":
+        case "TRK":
+          List<String> strings = _parseTextData(
+            frame.bytes[0],
+            frame.bytes.sublist(1),
+          ).replaceAll(RegExp(r"[^0-9/]"), "").split("/");
 
-          // Album artist
-          case "TPE2":
-          case "TP2":
-            result.albumArtist = _parseTextData(
-              frame.bytes[0],
-              frame.bytes.sublist(1),
-            );
+          result.trackNumber = int.tryParse(strings[0]);
+          result.albumTrackCount =
+              strings.length > 1 ? int.tryParse(strings[1]) : null;
 
-            break;
+          break;
 
-          // Year
-          case "TYER":
-          case "TYR":
-            result.year = int.tryParse(
-              _parseTextData(
-                frame.bytes[0],
-                frame.bytes.sublist(1),
-              ).replaceAll(RegExp(r"[^0-9/]"), ""),
-            );
+        // Genre
+        case "TCON":
+        case "TCO":
+          result.genre = _parseTextData(
+            frame.bytes[0],
+            frame.bytes.sublist(1),
+          );
 
-            break;
+          break;
 
-          // Track number
-          case "TRCK":
-          case "TRK":
-            List<String> strings = _parseTextData(
-              frame.bytes[0],
-              frame.bytes.sublist(1),
-            ).replaceAll(RegExp(r"[^0-9/]"), "").split("/");
+        // Unsynchronised lyrics/text
+        case "USLT":
+          int offset = 0;
 
-            result.trackNumber = int.tryParse(strings[0]);
-            result.albumTrackCount =
-                strings.length > 1 ? int.tryParse(strings[1]) : null;
+          //print(frame.bytes);
+          int encoding = frame.bytes[offset];
+          offset += 1;
 
-            break;
+          String language =
+              String.fromCharCodes(frame.bytes.sublist(offset, offset + 3));
+          offset += 3;
 
-          // Genre
-          case "TCON":
-          case "TCO":
-            result.genre = _parseTextData(
-              frame.bytes[0],
-              frame.bytes.sublist(1),
-            );
+          // skip description
+          if (encoding == 1 || encoding == 2) {
+            // UTF16 text encoding
+            for (offset += 1;
+                frame.bytes[offset] != 0x00 || frame.bytes[offset - 1] != 0x00;
+                offset += 2) {}
+            offset += 1;
+          } else {
+            // other text encodings
+            for (; frame.bytes[offset] != 0; offset += 2) {}
+          }
 
-            break;
-        }
+          // read and parse main lyrics
+          result.lyrics == null
+              ? result.lyrics = [
+                  Lyric(_parseTextData(encoding, frame.bytes.sublist(offset)),
+                      language: language)
+                ]
+              : result.lyrics!.add(Lyric(
+                  _parseTextData(encoding, frame.bytes.sublist(offset)),
+                  language: language));
+
+          break;
       }
-    } catch (e) {
-      rethrow;
     }
 
     return result;
