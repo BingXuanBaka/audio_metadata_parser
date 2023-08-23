@@ -177,8 +177,8 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
           int encoding = frame.bytes[offset];
           offset += 1;
 
-          String language =
-              String.fromCharCodes(frame.bytes.sublist(offset, offset + 3));
+          //String language =
+          //    String.fromCharCodes(frame.bytes.sublist(offset, offset + 3));
           offset += 3;
 
           // skip description
@@ -194,14 +194,7 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
           }
 
           // read and parse main lyrics
-          result.lyrics == null
-              ? result.lyrics = [
-                  Lyric(_parseTextData(encoding, frame.bytes.sublist(offset)),
-                      language: language)
-                ]
-              : result.lyrics!.add(Lyric(
-                  _parseTextData(encoding, frame.bytes.sublist(offset)),
-                  language: language));
+          result.lyrics = _parseTextData(encoding, frame.bytes.sublist(offset));
 
           break;
       }
