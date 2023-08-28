@@ -1,24 +1,23 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
-import '../audio_metadata_parser.dart';
-import '../common/utils.dart';
+import 'package:audio_metadata_parser/audio_metadata_parser.dart';
+import 'package:audio_metadata_parser/common/models/image_metadata.dart';
+import 'package:audio_metadata_parser/common/models/audio_metadata.dart';
+import 'package:audio_metadata_parser/common/models/flac.dart';
+import 'package:audio_metadata_parser/common/utils.dart';
 
-class FLACMetaDataParser implements AudioMetadataParser {
-  List<int> bytes;
-  int offset = 0;
-  int length = 0;
+class FLACMetadataParser implements AudioMetadataParser {
+  final Uint8List _bytes;
 
-  List<int>? _readBytes(int length) {
-    if (bytes.length >= length + offset) {
-      var result = bytes.sublist(offset, offset + length);
-      offset += length;
-      return result;
-    }
-    return null;
-  }
+  FLACMetadataParser(this._bytes);
 
-  FLACMetaDataParser(this.bytes) {
-    offset = 4;
+  int offset = 4;
+
+  Uint8List _readBytes(int length) {
+    offset += length;
+
+    return _bytes.sublist(offset - length, offset);
   }
 
   @override
@@ -32,126 +31,85 @@ class FLACMetaDataParser implements AudioMetadataParser {
       switch (metadataBlock.blockType) {
         // VORBIS_COMMENT
         case 4:
-          var offset = 0;
-
-          // skip vendor string
-          var vendorLength = parseIntFromBytes(
-              metadataBlock.bytes.sublist(0, 4).reversed.toList());
-          offset = 4 + vendorLength;
-
-          // parse user comment list length
-          var listLength = parseIntFromBytes(metadataBlock.bytes
-              .sublist(offset, offset + 4)
-              .reversed
-              .toList());
-          offset += 4;
-
-          // parse all comments
-          for (int i = 0; i < listLength; i++) {
-            var commentLength = parseIntFromBytes(metadataBlock.bytes
-                .sublist(offset, offset + 4)
-                .reversed
-                .toList());
-            offset += 4;
-
-            List<String> commentContent = utf8
-                .decode(
-                    metadataBlock.bytes.sublist(offset, offset + commentLength))
-                .split("=");
-            offset += commentLength;
-
-            if (commentContent.length < 2) continue;
-            switch (commentContent[0].toUpperCase()) {
+          var comments = metadataBlock.parseToVorbisCommentBlockList();
+          for (var comment in comments) {
+            switch (comment.blockType) {
               case "TITLE":
-                result.title = commentContent[1];
+                result.title = comment.content;
                 break;
 
               case "ALBUM":
-                result.album = commentContent[1];
+                result.album = comment.content;
                 break;
 
               case "ARTIST":
                 result.artist == null
-                    ? result.artist = [commentContent[1]]
-                    : result.artist!.add(commentContent[1]);
+                    ? result.artist = [comment.content]
+                    : result.artist!.add(comment.content);
                 break;
 
               case "ALBUMARTIST":
-                result.albumArtist = commentContent[1];
+                result.albumArtist = comment.content;
                 break;
 
               case "TRACKNUMBER":
-                result.trackNumber = int.tryParse(commentContent[1]);
+                result.trackNumber = int.tryParse(comment.content);
                 break;
 
               case "TOTALTRACKS":
               case "TRACKTOTAL":
-                result.albumTrackCount = int.tryParse(commentContent[1]);
+                result.albumTrackCount = int.tryParse(comment.content);
                 break;
 
               case "GENRE":
-                result.genre = commentContent[1];
+                result.genre = comment.content;
                 break;
 
               case "YEAR":
-                result.year = int.tryParse(commentContent[1]);
+                result.year = int.tryParse(comment.content);
                 break;
 
               case "LYRICS":
-                result.lyrics = commentContent[1];
+                result.lyrics = comment.content;
                 break;
             }
           }
-          break;
 
         // PICTURE
         case 6:
-          int offset = 0;
+          int type = metadataBlock.readBytesAsInt(4);
 
-          int type = parseIntFromBytes(
-              metadataBlock.bytes.sublist(offset, offset + 4));
-          offset += 4;
+          // parse mimetype
+          int mimeStringLength = metadataBlock.readBytesAsInt(4);
+          String mimeString =
+              ascii.decode(metadataBlock.readBytes(mimeStringLength));
 
-          int mimeStringLength = parseIntFromBytes(
-              metadataBlock.bytes.sublist(offset, offset + 4));
-          offset += 4;
-          String mimeString = ascii.decode(
-              metadataBlock.bytes.sublist(offset, offset + mimeStringLength));
-          offset += mimeStringLength;
-
-          int descriptionLength = parseIntFromBytes(
-              metadataBlock.bytes.sublist(offset, offset + 4));
-          offset += 4;
-          String description = utf8.decode(
-              metadataBlock.bytes.sublist(offset, offset + descriptionLength));
-          offset += descriptionLength;
+          // parse description
+          int descriptionLength = metadataBlock.readBytesAsInt(4);
+          String description =
+              utf8.decode(metadataBlock.readBytes(descriptionLength));
 
           // skip width height color depth and indexed-color pictures's colors
-          offset += 4 * 4;
+          metadataBlock.offset += 4 * 4;
 
-          int pictureDataLength = parseIntFromBytes(
-              metadataBlock.bytes.sublist(offset, offset + 4));
-          offset += 4;
+          int bytesLength = metadataBlock.readBytesAsInt(4);
+          Uint8List bytes = metadataBlock.readBytes(bytesLength);
 
-          List<int> pictureData =
-              metadataBlock.bytes.sublist(offset, offset + pictureDataLength);
-
-          var parsedPicture = _AttachedPicture(
-            type,
-            ImageMetadata(
-              description: description,
-              imageMIMEType: mimeString,
-              imageByteData: pictureData,
-            ),
+          var parsedPicture = AttachedPicture(
+            pictureType: type,
+            description: description,
+            mimeType: mimeString,
+            bytes: bytes,
           );
 
           if (type == 3 || type == 6) {
-            result.frontCoverImage = parsedPicture.image;
+            result.frontCoverImage = parsedPicture;
           }
 
           break;
       }
 
+      // break when current Metadata block is the last
       if (metadataBlock.isLast) break;
     }
 
@@ -162,35 +120,15 @@ class FLACMetaDataParser implements AudioMetadataParser {
     int frameLength = 0;
 
     // parse this block is last and blockType
-    bool isLast = (bytes[offset] & 0x80) >> 7 == 1;
-    int blockType = bytes[offset] & 0x7F;
+    bool isLast = (_bytes[offset] & 0x80) >> 7 == 1;
+    int blockType = _bytes[offset] & 0x7F;
     offset += 1;
 
     //parse length
-    frameLength = parseIntFromBytes(_readBytes(3) ?? []);
+    frameLength = parseIntFromBytes(_readBytes(3));
 
-    List<int> content = _readBytes(frameLength) ?? [];
+    Uint8List content = _readBytes(frameLength);
 
     return FLACMetadataBlock(blockType, isLast, content);
   }
-}
-
-class FLACMetadataBlock {
-  int blockType;
-  bool isLast;
-  List<int> bytes;
-  FLACMetadataBlock(this.blockType, this.isLast, this.bytes);
-
-  @override
-  String toString() {
-    return "FLACMetadataBlock{blockType: $blockType, isLast: $isLast, bytes: $bytes}";
-  }
-}
-
-// parsed data of APIC frame
-class _AttachedPicture {
-  _AttachedPicture(this.pictureType, this.image);
-
-  int? pictureType;
-  ImageMetadata? image;
 }

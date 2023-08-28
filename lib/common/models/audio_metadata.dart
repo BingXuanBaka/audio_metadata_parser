@@ -1,3 +1,5 @@
+import 'package:audio_metadata_parser/common/models/image_metadata.dart';
+
 class AudioMetadata {
   AudioMetadata({
     this.title,
@@ -32,19 +34,4 @@ class AudioMetadata {
   }
 }
 
-class ImageMetadata {
-  ImageMetadata({
-    this.description,
-    this.imageMIMEType,
-    this.imageByteData,
-  });
 
-  String? description;
-  String? imageMIMEType;
-  List<int>? imageByteData;
-
-  @override
-  String toString() {
-    return "ImageMetadata{description: $description, MIME: $imageMIMEType}";
-  }
-}

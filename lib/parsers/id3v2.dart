@@ -1,157 +1,82 @@
-import 'dart:convert';
+import 'dart:typed_data';
 
-import '../audio_metadata_parser.dart';
-import '../common/utils.dart';
+import 'package:audio_metadata_parser/audio_metadata_parser.dart';
+import 'package:audio_metadata_parser/common/models/audio_metadata.dart';
+import 'package:audio_metadata_parser/common/models/id3v2.dart';
+import 'package:audio_metadata_parser/common/utils.dart';
 
-class ID3v2MetaDataParser implements AudioMetadataParser {
-  List<int> bytes;
-  int offset = 0;
-  int reversion = 0;
-  int length = 0;
+class ID3v2MetadataParser implements AudioMetadataParser {
+  final Uint8List _bytes;
 
-  List<int>? _readBytes(int length) {
-    if (bytes.length >= length + offset) {
-      var result = bytes.sublist(offset, offset + length);
-      offset += length;
-      return result;
-    }
-    return null;
+  late int reversion = 0;
+  late int _length;
+
+  ID3v2MetadataParser(this._bytes) {
+    reversion = _bytes[3];
+
+    _length = parseSynchsafe(_readBytes(4));
   }
 
-  ID3v2MetaDataParser(this.bytes) {
-    reversion = bytes[3];
+  int offset = 6;
 
-    offset = 6;
-    length = parseSynchsafe(_readBytes(4) ?? []);
-    offset = 10;
+  Uint8List _readBytes(int length) {
+    offset += length;
+    return _bytes.sublist(offset - length, offset);
   }
 
-  /// Parse metadata to [AudioMetadata]
+  /*int _readByte() {
+    offset += 1;
+    return _bytes[offset - 1];
+  }*/
+
   @override
   AudioMetadata parse() {
     AudioMetadata result = AudioMetadata();
 
-    while (offset < length) {
+    while (offset < _length) {
       var frame = _getFrame();
-      //print(frame);
 
       switch (frame.id) {
-        // Cover image
-        case "APIC":
-        case "PIC":
-          var parsedPic = _parseAttachedPicture(frame.bytes);
-
-          if (parsedPic.pictureType == 0x03) {
-            result.frontCoverImage = parsedPic.image;
-          }
-
-          if (parsedPic.pictureType == 0x06) {
-            result.frontCoverImage = parsedPic.image;
-          }
-
-          break;
-
         // Album name
         case "TALB":
         case "TAL":
-          result.album = _parseTextData(
-            frame.bytes[0],
-            frame.bytes.sublist(1),
-          );
-
+          result.album = frame.parseAsTextFrame();
           break;
 
         // Track name
         case "TIT2":
         case "TT2":
-          result.title = _parseTextData(
-            frame.bytes[0],
-            frame.bytes.sublist(1),
-          );
-
-          break;
-
-        // Comments
-        case "COMM":
-        case "COM":
-          int offset = 0;
-
-          //print(frame.bytes);
-          int encoding = frame.bytes[offset];
-          offset += 1;
-
-          // skip language settings
-          offset += 3;
-
-          // parse short description
-          List<int> descriptionBytes = [];
-          if (encoding == 1) {
-            // UTF16 text encoding
-            for (offset += 1;
-                frame.bytes[offset] != 0x00 || frame.bytes[offset - 1] != 0x00;
-                offset += 2) {
-              descriptionBytes
-                  .addAll([frame.bytes[offset], frame.bytes[offset - 1]]);
-            }
-            offset += 1;
-          } else {
-            // other text encodings
-            while (frame.bytes[offset] != 0) {
-              descriptionBytes.add(frame.bytes[offset]);
-              offset += 1;
-            }
-          }
-          String description = _parseTextData(encoding, descriptionBytes);
-
-          // read and parse main comment
-          if (description == "") {
-            result.comment =
-                _parseTextData(encoding, frame.bytes.sublist(offset));
-          }
-
+          result.title = frame.parseAsTextFrame();
           break;
 
         // Artist
         case "TPE1":
         case "TP1":
-          var frameText = _parseTextData(
-            frame.bytes[0],
-            frame.bytes.sublist(1),
-          );
-
+          var frameText = frame.parseAsTextFrame();
           result.artist = frameText.split("/");
-
           break;
 
         // Album artist
         case "TPE2":
         case "TP2":
-          result.albumArtist = _parseTextData(
-            frame.bytes[0],
-            frame.bytes.sublist(1),
-          );
-
+          result.albumArtist = frame.parseAsTextFrame();
           break;
 
         // Year
         case "TYER":
         case "TYR":
           result.year = int.tryParse(
-            _parseTextData(
-              frame.bytes[0],
-              frame.bytes.sublist(1),
-            ).replaceAll(RegExp(r"[^0-9/]"), ""),
+            frame.parseAsTextFrame().replaceAll(RegExp(r"[^0-9/]"), ""),
           );
-
           break;
 
         // Track number
         case "TRCK":
         case "TRK":
-          List<String> strings = _parseTextData(
-            frame.bytes[0],
-            frame.bytes.sublist(1),
-          ).replaceAll(RegExp(r"[^0-9/]"), "").split("/");
+          List<String> strings = frame
+              .parseAsTextFrame()
+              .replaceAll(RegExp(r"[^0-9/]"), "")
+              .split("/");
 
           result.trackNumber = int.tryParse(strings[0]);
           result.albumTrackCount =
@@ -162,39 +87,56 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
         // Genre
         case "TCON":
         case "TCO":
-          result.genre = _parseTextData(
-            frame.bytes[0],
-            frame.bytes.sublist(1),
-          );
+          result.genre = frame.parseAsTextFrame();
+          break;
+
+        // Cover image
+        case "APIC":
+        case "PIC":
+          var parsedPic = frame.parseAsAttachedPicture(reversion);
+
+          if (parsedPic.pictureType == 0x03) {
+            result.frontCoverImage = parsedPic;
+          }
+
+          if (parsedPic.pictureType == 0x06) {
+            result.frontCoverImage = parsedPic;
+          }
 
           break;
 
-        // Unsynchronised lyrics/text
+        // Comments
+        case "COMM":
+        case "COM":
+          //print(frame.bytes);
+          int encoding = frame.readByte();
+
+          // skip language settings
+          frame.offset += 3;
+
+          // skip short description
+          frame.parseTextInFrameUntill0x00(encoding);
+
+          // read and parse main comment
+          result.comment =
+              parseID3v2TextData(encoding, frame.bytes.sublist(frame.offset));
+
+          break;
+
+        // Lyrics
         case "USLT":
           int offset = 0;
+          int encoding = frame.readByte();
 
-          //print(frame.bytes);
-          int encoding = frame.bytes[offset];
-          offset += 1;
-
-          //String language =
-          //    String.fromCharCodes(frame.bytes.sublist(offset, offset + 3));
-          offset += 3;
+          // skip language
+          frame.readBytes(3);
 
           // skip description
-          if (encoding == 1 || encoding == 2) {
-            // UTF16 text encoding
-            for (offset += 1;
-                frame.bytes[offset] != 0x00 || frame.bytes[offset - 1] != 0x00;
-                offset += 2) {}
-            offset += 1;
-          } else {
-            // other text encodings
-            for (; frame.bytes[offset] != 0; offset += 2) {}
-          }
+          frame.parseTextInFrameUntill0x00(encoding);
 
           // read and parse main lyrics
-          result.lyrics = _parseTextData(encoding, frame.bytes.sublist(offset));
+          result.lyrics =
+              parseID3v2TextData(encoding, frame.bytes.sublist(offset));
 
           break;
       }
@@ -203,131 +145,23 @@ class ID3v2MetaDataParser implements AudioMetadataParser {
     return result;
   }
 
-  _ID3v2Frame _getFrame() {
+  ID3v2Frame _getFrame() {
     int frameLength = 0;
     //int compressedLength = 0;
 
     // parse frameID
-    String frameID =
-        String.fromCharCodes(_readBytes(reversion < 3 ? 3 : 4) ?? []);
+    String frameID = String.fromCharCodes(_readBytes(reversion < 3 ? 3 : 4));
 
     //parse length
     frameLength = reversion >= 4
-        ? parseSynchsafe(_readBytes(4) ?? [])
-        : parseIntFromBytes(_readBytes(reversion <= 2 ? 3 : 4) ?? []);
+        ? parseSynchsafe(_readBytes(4))
+        : parseIntFromBytes(_readBytes(reversion <= 2 ? 3 : 4));
 
-    // parse flags
-    //int flag1 = bytes[offset];
-    int flag2 = bytes[offset + 1];
+    // skip flags
     offset += 2;
 
-    // if compressed
-    if ((flag2 & 0x40) >> 6 == 1) {
-      //print("compressed");
-      /*compressedLength = ((bytes[0] & 0x7F) << 24) |
-      ((bytes[1] & 0xFF) << 16) |
-      ((bytes[2] & 0xFF) << 8) |
-      (bytes[3] & 0xFF);*/
-    }
+    Uint8List content = _readBytes(frameLength);
 
-    List<int> content = _readBytes(frameLength) ?? [];
-
-    return _ID3v2Frame(frameID, content);
-  }
-
-  String _parseTextData(int textEncoding, List<int> bytes) {
-    switch (textEncoding) {
-      case 0:
-        return latin1.decode(bytes);
-      case 1:
-        return parseUTF16StringWithBOM(bytes);
-      case 2:
-        return parseUTF16StringWithBOM([0xFE, 0xFF, ...bytes]);
-      case 3:
-        return utf8.decode(bytes);
-    }
-
-    // returns a empty string defaultly, if not parsed done
-    return "";
-  }
-
-  // parse APIC frame
-  _AttachedPicture _parseAttachedPicture(List<int> body) {
-    int offset = 0;
-    late int pictureType;
-    ImageMetadata resultImage = ImageMetadata();
-
-    int encoding = body[offset];
-    offset += 1;
-
-    // parse picture MIME
-    // id3v2.2 and lower
-    if (reversion <= 2) {
-      var type =
-          String.fromCharCodes(body.sublist(offset, offset + 3)).toLowerCase();
-      resultImage.imageMIMEType = type == "jpg" ? "image/jpeg" : "image/$type";
-      offset += 3;
-    }
-    // id3v2.3 and higher
-    else {
-      var type = "";
-      while (body[offset] != 0) {
-        type += String.fromCharCode(body[offset]);
-        offset += 1;
-      }
-
-      resultImage.imageMIMEType = type;
-      offset += 1;
-    }
-
-    // parse picture type
-    pictureType = body[offset];
-    offset += 1;
-
-    // get description bytes until found 0x00 (or [0x00, 0x00])
-    List<int> descriptionBytes = [];
-    if (encoding == 1) {
-      // UTF16 text encoding
-      for (offset += 1;
-          body[offset] != 0x00 || body[offset - 1] != 0x00;
-          offset += 2) {
-        descriptionBytes.addAll([body[offset], body[offset - 1]]);
-      }
-      offset += 1;
-    } else {
-      // other text encodings
-      while (body[offset] != 0) {
-        descriptionBytes.add(body[offset]);
-        offset += 1;
-      }
-      offset += 1;
-    }
-
-    // parse description bytes to string
-    resultImage.description = _parseTextData(encoding, descriptionBytes);
-
-    // get image byte datas
-    resultImage.imageByteData = body.sublist(offset);
-
-    return _AttachedPicture(pictureType, resultImage);
-  }
-}
-
-// parsed data of APIC frame
-class _AttachedPicture {
-  _AttachedPicture(this.pictureType, this.image);
-
-  int? pictureType;
-  ImageMetadata? image;
-}
-
-class _ID3v2Frame {
-  _ID3v2Frame(this.id, this.bytes);
-  String id;
-  List<int> bytes;
-
-  @override
-  String toString() {
-    return "Frame{id: $id, bytes: $bytes}";
+    return ID3v2Frame(frameID, content);
   }
 }
