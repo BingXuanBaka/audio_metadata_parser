@@ -131,4 +131,7 @@ class FLACMetadataParser implements AudioMetadataParser {
 
     return FLACMetadataBlock(blockType, isLast, content);
   }
+
+  @override
+  Future<AudioMetadata> parseAsync() => Future(() => parse());
 }

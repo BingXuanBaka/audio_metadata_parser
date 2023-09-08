@@ -26,12 +26,19 @@ abstract class AudioMetadataParser {
     return UnknownMetadataParser();
   }
 
-  /// Parse Metadata contains in parser,
+  /// Parse Metadata contains in parser synchronously,
   /// returns [AudioMetadata].
   AudioMetadata parse();
+
+  /// Parse Metadata contains in parser asynchronously,
+  /// returns [Future<AudioMetadata>].
+  Future<AudioMetadata> parseAsync();
 }
 
 class UnknownMetadataParser implements AudioMetadataParser {
   @override
   AudioMetadata parse() => AudioMetadata();
+
+  @override
+  Future<AudioMetadata> parseAsync() => Future(() => parse());
 }

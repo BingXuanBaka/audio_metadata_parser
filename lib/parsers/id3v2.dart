@@ -32,7 +32,6 @@ class ID3v2MetadataParser implements AudioMetadataParser {
   @override
   AudioMetadata parse() {
     AudioMetadata result = AudioMetadata();
-
     while (offset < _length) {
       var frame = _getFrame();
 
@@ -164,4 +163,7 @@ class ID3v2MetadataParser implements AudioMetadataParser {
 
     return ID3v2Frame(frameID, content);
   }
+
+  @override
+  Future<AudioMetadata> parseAsync() => Future(() => parse());
 }
