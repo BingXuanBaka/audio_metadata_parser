@@ -124,7 +124,6 @@ class ID3v2MetadataParser implements AudioMetadataParser {
 
         // Lyrics
         case "USLT":
-          int offset = 0;
           int encoding = frame.readByte();
 
           // skip language
@@ -135,7 +134,7 @@ class ID3v2MetadataParser implements AudioMetadataParser {
 
           // read and parse main lyrics
           result.lyrics =
-              parseID3v2TextData(encoding, frame.bytes.sublist(offset));
+              parseID3v2TextData(encoding, frame.bytes.sublist(frame.offset));
 
           break;
       }
