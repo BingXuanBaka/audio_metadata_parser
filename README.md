@@ -14,7 +14,7 @@ and the Flutter guide for
 > [!WARNING]  
 > This package is still developing and may will have many breaking changes
 > before publishing the first release.  
-> **USE AS YOUR OWN RISK.**
+> **USE AT YOUR OWN RISK.**
 
 ## Features
 
